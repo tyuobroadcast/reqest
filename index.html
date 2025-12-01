@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>昼休み音楽リクエスト</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    header, section { margin-bottom: 20px; }
+    .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    label { display:block; margin: 8px 0 4px; }
+    input, select, button { padding: 8px; }
+    .small { font-size: 12px; color: #555; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>昼休み音楽リクエスト</h1>
+  <div id="todayStatus" class="small">読み込み中...</div>
+</header>
+
+<section class="card">
+  <h2>曲のリクエスト</h2>
+  <form id="requestForm">
+    <label>曲名</label>
+    <input type="text" id="title" required placeholder="例: 光る君へ">
+    <label>アーティスト</label>
+    <input type="text" id="artist" required placeholder="例: 宇多田ヒカル">
+    <label>お名前（任意）</label>
+    <input type="text" id="userName" placeholder="例: drive">
+    <div class="small" id="usenHint"></div>
+    <button type="submit">AIで確認して予約</button>
+  </form>
+  <div id="confirmArea" style="display:none;">
+    <h3>確認候補</h3>
+    <div id="candidates"></div>
+    <button id="confirmBtn">この内容で予約</button>
+  </div>
+  <div id="result"></div>
+</section>
+
+<section class="card">
+  <h2>今日の放送予定</h2>
+  <div class="row">
+    <div>
+      <h3>12:47–13:00</h3>
+      <ul id="slot1"></ul>
+    </div>
+    <div>
+      <h3>13:01–13:10</h3>
+      <ul id="slot2"></ul>
+    </div>
+  </div>
+</section>
+
+<script>
+const GAS_BASE = 'https://script.google.com/macros/s/XXXX/exec'; // あなたのGAS公開URL
+
+async function loadStatus() {
+  const res = await fetch(`${GAS_BASE}?action=status`);
+  const data = await res.json();
+  document.getElementById('todayStatus').textContent =
+    `今日のチャンネル: ${data.channel_name}（コード: ${data.channel_code}） / ロック: ${data.locked ? 'ON':'OFF'}`;
+  renderSchedule(data.schedule);
+}
+
+function renderSchedule(schedule) {
+  const s1 = document.getElementById('slot1');
+  const s2 = document.getElementById('slot2');
+  s1.innerHTML = ''; s2.innerHTML = '';
+  (schedule || []).forEach(item => {
+    const li = document.createElement('li');
+    li.textContent = `${item.title} - ${item.artist}`;
+    if (item.slot === '12:47-13:00') s1.appendChild(li);
+    else s2.appendChild(li);
+  });
+}
+
+document.getElementById('requestForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = document.getElementById('title').value.trim();
+  const artist = document.getElementById('artist').value.trim();
+  const userName = document.getElementById('userName').value.trim();
+
+  document.getElementById('usenHint').innerHTML =
+    `USEN検索: <a target="_blank" href="https://music.usen.com/ch/search/result/?service=sp440&keyword=${encodeURIComponent(title + ' ' + artist)}">こちら</a>`;
+
+  const res = await fetch(GAS_BASE, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'request', title, artist, userName })
+  });
+  const data = await res.json();
+
+  if (data.candidates && data.candidates.length) {
+    const area = document.getElementById('confirmArea');
+    area.style.display = 'block';
+    const wrap = document.getElementById('candidates');
+    wrap.innerHTML = data.candidates.map((c,i)=>
+      `<label><input type="radio" name="cand" value="${i}" ${i===0?'checked':''}> ${c.title} - ${c.artist}（自信度:${Math.round(c.confidence*100)}%）</label>`
+    ).join('');
+    document.getElementById('confirmBtn').onclick = async () => {
+      const idx = Number(document.querySelector('input[name="cand"]:checked').value);
+      const confirmRes = await fetch(GAS_BASE, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'confirm', candidate: data.candidates[idx] })
+      });
+      const confirmData = await confirmRes.json();
+      document.getElementById('result').textContent = confirmData.message;
+      loadStatus();
+    };
+  } else {
+    document.getElementById('result').textContent = data.message || '処理に失敗しました';
+  }
+});
+
+loadStatus();
+</script>
+</body>
+</html>
