@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>管理画面</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style> body { font-family: system-ui, sans-serif; margin: 24px; } </style>
+</head>
+<body>
+<h1>管理画面</h1>
+<div id="status"></div>
+
+<label>今日のチャンネルコード（英数字3桁）</label>
+<input id="code" placeholder="例: YT1">
+<button id="setBtn">設定</button>
+
+<label>ロック</label>
+<button id="lockOn">ロックON</button>
+<button id="lockOff">ロックOFF</button>
+
+<script>
+const GAS_BASE = 'https://script.google.com/macros/s/XXXX/exec';
+
+async function loadStatus(){
+  const res = await fetch(`${GAS_BASE}?action=status`);
+  const data = await res.json();
+  document.getElementById('status').textContent =
+    `今日: ${data.date} / チャンネル: ${data.channel_name}（${data.channel_code}） / ロック: ${data.locked?'ON':'OFF'}`;
+}
+
+document.getElementById('setBtn').onclick = async () => {
+  const code = document.getElementById('code').value.trim();
+  const res = await fetch(GAS_BASE, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'admin_setChannel', code })
+  });
+  const data = await res.json(); alert(data.message); loadStatus();
+};
+
+document.getElementById('lockOn').onclick = async () => {
+  const res = await fetch(GAS_BASE, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'admin_lock', lock:true })
+  });
+  const data = await res.json(); alert(data.message); loadStatus();
+};
+
+document.getElementById('lockOff').onclick = async () => {
+  const res = await fetch(GAS_BASE, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'admin_lock', lock:false })
+  });
+  const data = await res.json(); alert(data.message); loadStatus();
+};
+
+loadStatus();
+</script>
+</body>
+</html>
